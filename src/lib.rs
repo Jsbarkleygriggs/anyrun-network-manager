@@ -80,10 +80,18 @@ fn get_matches(input: RString, nm: &NMDetails) -> RVec<Match> {
                 icon: ROption::RNone,
                 use_pango: false,
                 description: ROption::RSome(
-                    format!(
-                        "toggle device {}",
-                        if device.is_active { "off" } else { "on" }
-                    )
+                        match device.state {
+                            DeviceState::Unmanaged => "NOT MANAGED",
+                            DeviceState::Unavailable => "toggle device on",
+                            DeviceState::Disconnected => "toggle device off",
+                            DeviceState::Prepare => "toggle device off",
+                            DeviceState::Activated => "toggle device off",
+                            DeviceState::IpConfig => "CONFIG REQUIRED",
+                            DeviceState::NeedAuth => "CONFIG REQUIRED",
+                            DeviceState::IpCheck => "device busy",
+                            DeviceState::Deactivating => "device busy",
+                            _ => ""
+                        }
                     .into(),
                 ),
                 id: ROption::RSome(1),
@@ -126,11 +134,19 @@ fn handler(selection: Match) -> HandleResult {
                     .wifi_device_by_interface(&selection.title)
                     .await
                     .expect("Interface Not Found");
-                let currently_enabled = device.state != DeviceState::Unavailable
-                    && device.state != DeviceState::Unmanaged;
-                nm.set_wifi_enabled(&selection.title, !currently_enabled)
-                    .await
-                    .expect("Unable to toggle interface");
+
+                match device.state {
+                    DeviceState::Unmanaged => {},
+                    DeviceState::Unavailable => {nm.set_wireless_enabled(true).await.expect("Unable to toggle interface");},
+                    DeviceState::Disconnected => {nm.set_wireless_enabled(false).await.expect("Unable to toggle interface");},
+                    DeviceState::Prepare => {nm.set_wireless_enabled(false).await.expect("Unable to toggle interface");},
+                    DeviceState::Activated => {nm.set_wireless_enabled(false).await.expect("Unable to toggle interface");},
+                    DeviceState::IpConfig => {},
+                    DeviceState::NeedAuth => {},
+                    DeviceState::IpCheck => {},
+                    DeviceState::Deactivating => {},
+                    _ => {}
+                };
             }
             ROption::RNone => {}
             ROption::RSome(2_u64..=u64::MAX) => {}
